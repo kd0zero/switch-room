@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}{{ game.title }} · Switch 游戏收藏管家{% endblock %}
+
+{% block content %}
+<div class="detail-page" data-game-id="{{ game.id }}" data-price="{{ game.purchase_price or 0 }}">
+
+  <a class="back" href="{{ url_for('index') }}">← 返回游戏库</a>
+
+  <!-- ── 头部 ────────────────────────────────────────────── -->
+  <section class="detail-head">
+    <div class="detail-cover">
+      {% if game.cover_path %}
+        <button class="cover-button" type="button"
+                data-lightbox="{{ url_for('static', filename=game.cover_path) }}"
+                data-caption="{{ game.title }} 封面"
+                aria-label="放大查看封面">
+          <img src="{{ url_for('thumb', relpath=game.cover_path) }}" alt="{{ game.title }} 封面">
+        </button>
+      {% else %}
+        <div class="cover-ph big {{ 'is-digital' if game.game_type == 'digital' }}">
+          <span>{{ game.title[:1] }}</span>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="detail-info">
+      <div class="detail-chips">
+        <span class="badge {{ 'badge-cart' if game.game_type == 'cartridge' else 'badge-dig' }}">
+          {{ game_types.get(game.game_type, game.game_type) }}
+        </span>
+        <span class="badge badge-status status-{{ game.status }}" data-status-badge>
+          {{ statuses.get(game.status, '未开始') }}
+        </span>
+        {% if game.rating %}
+        <span class="badge badge-rating" data-rating-badge>{{ game.rating }} 星</span>
+        {% else %}
+        <span class="badge badge-rating" data-rating-badge hidden></span>
+        {% endif %}
+      </div>
+
+      <h1 class="detail-title">{{ game.title }}</h1>
+
+      <div class="detail-stats">
+        <div class="dstat">
+          <span class="dstat-label">购买日期</span>
+          <b class="dstat-value">{{ game.purchase_date or '—' }}</b>
+        </div>
+        <div class="dstat">
+          <span class="dstat-label">购买价格</span>
+          <b class="dstat-value">{% if game.purchase_price %}¥{{ game.purchase_price|money }}{% else %}—{% endif %}</b>
+        </div>
+        <div class="dstat">
+          <span class="dstat-label">游玩时长</span>
+          <b class="dstat-value" data-playtime>{{ game.playtime_hours|hours }}<small> 小时</small></b>
+        </div>
+        <div class="dstat">
+          <span class="dstat-label">每小时成本</span>
+          <b class="dstat-value" data-cost>
+            {%- if game.purchase_price and game.playtime_hours and game.playtime_hours > 0 -%}
+              ¥{{ (game.purchase_price / game.playtime_hours)|round(1) }}
+            {%- else -%}—{%- endif -%}
+          </b>
+        </div>
+      </div>
+
+      <div class="quick-actions">
+        <div class="quick-group">
+          <span class="quick-label">记录时长</span>
+          <button class="btn btn-soft btn-sm" type="button" data-quick-playtime="0.5">＋0.5h</button>
+          <button class="btn btn-soft btn-sm" type="button" data-quick-playtime="1">＋1h</button>
+          <button class="btn btn-soft btn-sm" type="button" data-quick-playtime="5">＋5h</button>
+        </div>
+
+        <div class="quick-group">
+          <span class="quick-label">评分</span>
+          <div class="rating-input" data-quick-rating>
+            {% for i in range(1, 6) %}
+            <button class="star {{ 'on' if game.rating and i <= game.rating }}"
+                    type="button" data-value="{{ i }}" aria-label="评为 {{ i }} 星">★</button>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="quick-group">
+          <span class="quick-label">状态</span>
+          <div class="seg seg-sm" data-quick-status>
+            {% for key, label in statuses.items() %}
+            <button class="seg-item {{ 'is-active' if game.status == key }}"
+                    type="button" data-status="{{ key }}">{{ label }}</button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 基本信息 ────────────────────────────────────────── -->
+  <details class="panel collapsible" open>
+    <summary class="panel-head">
+      <h2>基本信息</h2>
+      <span class="panel-hint">点击展开 / 收起</span>
+    </summary>
+    <div class="panel-body">
+      <form method="post" action="{{ url_for('update_game', game_id=game.id) }}"
+            enctype="multipart/form-data" class="form-grid">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+
+        <label class="field span-2">
+          <span class="field-label">游戏名称</span>
+          <input class="input" name="title" value="{{ game.title }}" maxlength="120" required>
+        </label>
+
+        <label class="field">
+          <span class="field-label">类型</span>
+          <select class="input" name="game_type">
+            {% for key, label in game_types.items() %}
+            <option value="{{ key }}" {{ 'selected' if game.game_type == key }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="field">
+          <span class="field-label">购买日期</span>
+          <input class="input" type="date" name="purchase_date" value="{{ game.purchase_date or '' }}">
+        </label>
+
+        <label class="field">
+          <span class="field-label">购买价格 (¥)</span>
+          <input class="input" type="number" step="0.01" min="0" name="purchase_price"
+                 value="{{ game.purchase_price if game.purchase_price is not none else '' }}"
+                 placeholder="留空表示免费或未知">
+        </label>
+
+        <label class="field">
+          <span class="field-label">游玩时长 (小时)</span>
+          <input class="input" type="number" step="0.1" min="0" name="playtime_hours"
+                 value="{{ game.playtime_hours if game.playtime_hours is not none else '' }}">
+        </label>
+
+        <label class="field span-2">
+          <span class="field-label">更换封面图</span>
+          <input class="input file-input" type="file" name="cover" accept="image/*">
+          <span class="field-hint">不选择则保留当前封面</span>
+        </label>
+
+        {% if ocr_available %}
+        <div class="ocr-box span-2" data-ocr>
+          <div class="ocr-head">
+            <span class="ocr-title"><span aria-hidden="true">🔍</span> 用购买截图更新日期与价格</span>
+            <span class="ocr-sub">识别结果只填入空白字段，不会覆盖你已填写的内容</span>
+          </div>
+          <label class="dropzone" data-dropzone>
+            <input class="sr-only" type="file" id="detailScreenshot" accept="image/*" data-ocr-input>
+            <span class="dropzone-icon" aria-hidden="true">🖼</span>
+            <span class="dropzone-text">点击选择截图，或把图片拖到这里</span>
+          </label>
+          <div class="ocr-result" id="ocrResultDetail" hidden></div>
+        </div>
+        {% endif %}
+
+        <div class="form-actions span-2">
+          <button type="submit" class="btn btn-primary">保存修改</button>
+          <span class="form-note">最后更新：{{ game.updated_at or game.created_at or '—' }}</span>
+        </div>
+      </form>
+    </div>
+  </details>
+
+  <!-- ── 照片收藏 ────────────────────────────────────────── -->
+  <section class="panel" id="gallery">
+    <div class="panel-head static">
+      <h2>照片收藏 <span class="count">{{ photos|length }}</span></h2>
+      <span class="panel-hint">点击任意照片可放大浏览，← → 切换</span>
+    </div>
+    <div class="panel-body">
+      {% if photos %}
+      <div class="gallery">
+        {% for p in photos %}
+        <figure class="photo">
+          <button class="photo-button" type="button"
+                  data-lightbox="{{ url_for('static', filename=p.path) }}"
+                  data-caption="{{ p.caption or game.title }}"
+                  aria-label="放大查看照片">
+            <img src="{{ url_for('thumb', relpath=p.path) }}" alt="{{ p.caption or '游戏照片' }}" loading="lazy" decoding="async">
+          </button>
+          <figcaption class="photo-cap">{{ p.caption or '—' }}</figcaption>
+          <form method="post" action="{{ url_for('delete_photo', photo_id=p.id) }}"
+                data-confirm="确定删除这张照片吗？此操作不可撤销。">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <button class="photo-del" type="submit" aria-label="删除照片">✕</button>
+          </form>
+        </figure>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="muted">还没有照片。上传实机截图、收藏摆拍或周边照片，留住这段回忆。</p>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('add_photo', game_id=game.id) }}"
+            enctype="multipart/form-data" class="photo-form">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <label class="dropzone dropzone-inline" data-dropzone>
+          <input class="sr-only" type="file" name="photo" accept="image/*" multiple required data-file-input>
+          <span class="dropzone-icon" aria-hidden="true">＋</span>
+          <span class="dropzone-text" data-file-label>点击或拖拽照片到此处（可多选）</span>
+        </label>
+        <input class="input" type="text" name="caption" maxlength="120" placeholder="照片说明（可选）">
+        <button class="btn btn-soft" type="submit">上传</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ── 备注 / 心流 ─────────────────────────────────────── -->
+  <section class="panel">
+    <div class="panel-head static">
+      <h2>备注 · 心流与感受</h2>
+      <span class="panel-hint">输入后自动保存</span>
+    </div>
+    <div class="panel-body">
+      <textarea id="notes" class="input notes-area" rows="8" maxlength="20000"
+        placeholder="在这款游戏里你体验过心流吗？最难忘的瞬间、通关感受、想对未来的自己说的话…">{{ game.notes or '' }}</textarea>
+      <div class="notes-foot">
+        <span class="notes-status" id="notesStatus" role="status"></span>
+        <span class="notes-count"><span id="notesCount">0</span> 字</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 危险操作 ────────────────────────────────────────── -->
+  <section class="panel danger">
+    <div class="panel-head static">
+      <h2>危险操作</h2>
+    </div>
+    <div class="panel-body danger-body">
+      <div>
+        <p class="danger-text">删除后，《{{ game.title }}》的封面、{{ photos|length }} 张照片与全部笔记都会一并移除，且无法恢复。</p>
+        <p class="muted">建议先到首页导出一份 CSV 备份。</p>
+      </div>
+      <form method="post" action="{{ url_for('delete_game', game_id=game.id) }}"
+            data-confirm="确认删除《{{ game.title }}》及其所有照片？此操作不可恢复。">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button class="btn btn-danger" type="submit">删除这款游戏</button>
+      </form>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

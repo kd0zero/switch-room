@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · {{ title }}{% endblock %}
+
+{% block content %}
+<div class="error-page">
+  <div class="error-code" aria-hidden="true">{{ code }}</div>
+  <h1 class="error-title">{{ title }}</h1>
+  <p class="error-text">{{ message }}</p>
+  <div class="error-actions">
+    <a class="btn btn-primary" href="{{ url_for('index') }}">← 回到游戏库</a>
+    <button class="btn btn-ghost" type="button" onclick="history.back()">返回上一页</button>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="theme-color" content="#0b0d12">
+  <meta name="description" content="本地运行的 Switch 游戏收藏管家：卡带与数字版管理、花费统计、截图 OCR、照片收藏与心流笔记。">
+  <title>{% block title %}Switch 游戏收藏管家{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23e60012'/%3E%3Crect x='6' y='7' width='8.5' height='18' rx='4.2' fill='%23fff'/%3E%3Crect x='17.5' y='7' width='8.5' height='18' rx='4.2' fill='%23fff' opacity='.55'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    /* 提前套用主题，避免刷新时闪白 */
+    (function () {
+      try {
+        var saved = localStorage.getItem('sw:theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {}
+    })();
+  </script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+
+  <!-- 贝塞尔装饰层：三条三次贝塞尔曲线 + 两个有机光斑 -->
+  <div class="bg-decor" aria-hidden="true">
+    <svg class="bg-curves" viewBox="0 0 1440 900" preserveAspectRatio="none" focusable="false">
+      <path class="curve curve-a" d="M-60,300 C240,150 470,430 760,275 C1020,135 1230,395 1500,235" />
+      <path class="curve curve-b" d="M-60,665 C250,530 520,785 830,625 C1090,495 1280,715 1500,585" />
+      <path class="curve curve-c" d="M-60,470 C300,360 610,560 910,445 C1170,345 1310,540 1500,430" />
+    </svg>
+    <span class="blob blob-a"></span>
+    <span class="blob blob-b"></span>
+  </div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="返回游戏库首页">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 24" width="26" height="20" focusable="false">
+            <rect x="1.2" y="1.2" width="13.6" height="21.6" rx="6.8"></rect>
+            <rect class="c2" x="17.2" y="1.2" width="13.6" height="21.6" rx="6.8"></rect>
+            <circle cx="8" cy="7.6" r="2.4"></circle>
+            <circle cx="24" cy="16.4" r="2.4"></circle>
+          </svg>
+        </span>
+        <span class="brand-text">Switch<em>收藏管家</em></span>
+      </a>
+
+      <nav class="topbar-actions" aria-label="全局操作">
+        <a class="btn btn-ghost btn-icon-text" href="{{ url_for('export_csv') }}" title="导出全部收藏为 CSV">
+          <span aria-hidden="true">⬇</span><span class="btn-label">导出</span>
+        </a>
+        <a class="btn btn-ghost btn-icon-text" href="{{ url_for('index') }}#import" title="从 CSV 导入收藏">
+          <span aria-hidden="true">⬆</span><span class="btn-label">导入</span>
+        </a>
+        <button class="btn btn-icon" type="button" id="themeToggle" aria-label="切换深色 / 浅色主题" title="切换主题">
+          <span class="theme-icon" aria-hidden="true">◐</span>
+        </button>
+        <a class="btn btn-primary" href="{{ url_for('index') }}#add">
+          <span aria-hidden="true">＋</span><span class="btn-label">添加游戏</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="toasts" id="toasts" aria-live="polite">
+      {% for category, message in messages %}
+      <div class="toast toast-{{ category }}" role="status">
+        <span class="toast-icon" aria-hidden="true">
+          {%- if category == 'ok' -%}✓{%- elif category == 'warn' -%}!{%- else -%}✕{%- endif -%}
+        </span>
+        <span class="toast-text">{{ message }}</span>
+        <button class="toast-close" type="button" aria-label="关闭提示">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="container" id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>数据全部保存在本机 <code>data/app.db</code>，不联网、不上传</span>
+    <span class="footer-dot" aria-hidden="true">·</span>
+    <span>OCR 本地离线识别</span>
+    <span class="footer-dot" aria-hidden="true">·</span>
+    <span>{{ current_year }}</span>
+  </footer>
+
+  {% block dialogs %}{% endblock %}
+
+  <!-- 通用确认弹窗（由 JS 接管带 data-confirm 的表单） -->
+  <dialog class="modal modal-sm" id="confirmModal" aria-labelledby="confirmTitle">
+    <div class="modal-form">
+      <header class="modal-head">
+        <h2 id="confirmTitle">请确认</h2>
+        <button class="icon-btn" type="button" data-close aria-label="关闭">✕</button>
+      </header>
+      <div class="modal-body">
+        <p class="modal-note" id="confirmMessage">确定执行该操作吗？</p>
+      </div>
+      <footer class="modal-actions">
+        <button class="btn btn-ghost" type="button" data-close>取消</button>
+        <button class="btn btn-danger" type="button" id="confirmOk">确认删除</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <!-- 图片灯箱 -->
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="图片浏览" hidden>
+    <button class="lb-close" type="button" data-lb-close aria-label="关闭">✕</button>
+    <button class="lb-nav lb-prev" type="button" data-lb-prev aria-label="上一张">‹</button>
+    <figure class="lb-figure">
+      <img class="lb-image" id="lbImage" src="" alt="">
+      <figcaption class="lb-caption" id="lbCaption"></figcaption>
+    </figure>
+    <button class="lb-nav lb-next" type="button" data-lb-next aria-label="下一张">›</button>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

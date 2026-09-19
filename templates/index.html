@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+{% block title %}游戏库 · Switch 游戏收藏管家{% endblock %}
+
+{% block content %}
+
+<!-- ── 顶部 Hero ───────────────────────────────────────────── -->
+<section class="hero">
+  <!-- 底部贝塞尔波浪 -->
+  <svg class="hero-wave" viewBox="0 0 1200 78" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <path class="wave-fill" d="M0,52 C190,8 360,74 600,40 C820,10 980,64 1200,26 L1200,78 L0,78 Z" />
+    <path class="wave-line" d="M0,52 C190,8 360,74 600,40 C820,10 980,64 1200,26" />
+  </svg>
+  <div class="hero-main">
+    <p class="hero-eyebrow">
+      <span class="dot" aria-hidden="true"></span>
+      本地收藏 · {{ current_year }}
+    </p>
+    <h1 class="hero-title">我的 Switch 游戏库</h1>
+    <p class="hero-sub">
+      {% if stats.total %}
+        共 <b>{{ stats.total }}</b> 款游戏，累计投入 <b>{{ stats.playtime|hours }}</b> 小时，
+        通关率 <b>{{ stats.completion }}%</b>
+        {%- if stats.top_game %}，最常玩的是《{{ stats.top_game.title }}》{% endif %}。
+      {% else %}
+        还没有游戏，先从添加第一款开始吧。
+      {% endif %}
+    </p>
+    <div class="hero-actions">
+      <button class="btn btn-primary" type="button" data-open="addModal">
+        <span aria-hidden="true">＋</span> 添加游戏
+      </button>
+      <button class="btn btn-soft" type="button" data-open="syncModal">
+        <span aria-hidden="true">⏱</span> 同步游玩时长
+      </button>
+      <button class="btn btn-ghost" type="button" data-open="importModal">
+        <span aria-hidden="true">⬆</span> 导入 CSV
+      </button>
+    </div>
+  </div>
+
+  <div class="hero-side">
+    <div class="spend-card">
+      <span class="spend-label">累计花费</span>
+      <span class="spend-value">¥<span data-count="{{ stats.spent }}" data-format="money">{{ stats.spent|money }}</span></span>
+      <span class="spend-sub">
+        平均每款 ¥{{ stats.avg_price|money }}
+        {% if stats.playtime and stats.spent %}· 每小时 ¥{{ (stats.spent / stats.playtime)|round(1) }}{% endif %}
+      </span>
+      <!-- 近六月花费：三次贝塞尔平滑样条（路径由 app.js 计算，随容器尺寸自适应） -->
+      <div class="chart" data-chart
+           data-points="{% for m in stats.monthly %}{{ m.value }}{% if not loop.last %},{% endif %}{% endfor %}"
+           data-peak="{{ stats.monthly_peak }}"
+           role="img"
+           aria-label="近六个月购买花费：{% for m in stats.monthly %}{{ m.label }} {{ m.value|money }} 元；{% endfor %}">
+        <svg class="chart-svg" viewBox="0 0 320 104" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop class="stop-a" offset="0%" />
+              <stop class="stop-b" offset="100%" />
+            </linearGradient>
+            <linearGradient id="chartStroke" x1="0" y1="0" x2="1" y2="0">
+              <stop class="cs-1" offset="0%" />
+              <stop class="cs-2" offset="55%" />
+              <stop class="cs-3" offset="100%" />
+            </linearGradient>
+          </defs>
+          <line class="chart-grid" x1="0" y1="1" x2="320" y2="1" />
+          <path class="chart-area" d="" />
+          <path class="chart-line" d="" />
+          <g class="chart-dots"></g>
+        </svg>
+        <div class="chart-labels">
+          {% for m in stats.monthly %}
+          <span class="chart-label" title="{{ m.key }}：¥{{ m.value|money }}">{{ m.label }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 数据卡片 ───────────────────────────────────────────── -->
+<section class="stats" aria-label="收藏统计">
+  <article class="stat accent-total">
+    <span class="stat-icon" aria-hidden="true">🎮</span>
+    <div>
+      <div class="stat-num" data-count="{{ stats.total }}">{{ stats.total }}</div>
+      <div class="stat-label">游戏总数</div>
+    </div>
+  </article>
+  <article class="stat accent-cart">
+    <span class="stat-icon" aria-hidden="true">🟥</span>
+    <div>
+      <div class="stat-num" data-count="{{ stats.cartridges }}">{{ stats.cartridges }}</div>
+      <div class="stat-label">实体卡带</div>
+    </div>
+  </article>
+  <article class="stat accent-dig">
+    <span class="stat-icon" aria-hidden="true">🟦</span>
+    <div>
+      <div class="stat-num" data-count="{{ stats.digital }}">{{ stats.digital }}</div>
+      <div class="stat-label">数字版</div>
+    </div>
+  </article>
+  <article class="stat accent-time">
+    <span class="stat-icon" aria-hidden="true">⏱</span>
+    <div>
+      <div class="stat-num"><span data-count="{{ stats.playtime }}" data-format="hours">{{ stats.playtime|hours }}</span><small>h</small></div>
+      <div class="stat-label">累计游玩</div>
+    </div>
+  </article>
+  <article class="stat accent-done">
+    <span class="stat-icon" aria-hidden="true">🏁</span>
+    <div>
+      <div class="stat-num"><span data-count="{{ stats.finished }}">{{ stats.finished }}</span><small>/{{ stats.total }}</small></div>
+      <div class="stat-label">已通关</div>
+    </div>
+  </article>
+  <article class="stat accent-playing">
+    <span class="stat-icon" aria-hidden="true">▶</span>
+    <div>
+      <div class="stat-num" data-count="{{ stats.playing }}">{{ stats.playing }}</div>
+      <div class="stat-label">正在玩</div>
+    </div>
+  </article>
+</section>
+
+<!-- ── 工具栏 ─────────────────────────────────────────────── -->
+<section class="toolbar">
+  <form class="toolbar-form" method="get" action="{{ url_for('index') }}" id="filterForm">
+    <div class="search">
+      <span class="search-icon" aria-hidden="true">⌕</span>
+      <input class="input search-input" type="search" name="q" id="searchInput"
+             value="{{ q }}" placeholder="搜索游戏名或笔记…" autocomplete="off"
+             aria-label="搜索游戏">
+      <kbd class="search-kbd" aria-hidden="true">/</kbd>
+    </div>
+
+    <div class="seg" role="group" aria-label="按类型筛选">
+      <a class="seg-item {{ 'is-active' if ftype == 'all' }}"
+         href="{{ url_for('index', q=q, status=fstatus, sort=sort, type='all') }}">全部</a>
+      <a class="seg-item {{ 'is-active' if ftype == 'cartridge' }}"
+         href="{{ url_for('index', q=q, status=fstatus, sort=sort, type='cartridge') }}">🟥 卡带</a>
+      <a class="seg-item {{ 'is-active' if ftype == 'digital' }}"
+         href="{{ url_for('index', q=q, status=fstatus, sort=sort, type='digital') }}">🟦 数字</a>
+    </div>
+
+    <div class="seg seg-status" role="group" aria-label="按状态筛选">
+      <a class="seg-item {{ 'is-active' if fstatus == 'all' }}"
+         href="{{ url_for('index', q=q, type=ftype, sort=sort, status='all') }}">不限状态</a>
+      {% for key, label in statuses.items() %}
+      <a class="seg-item {{ 'is-active' if fstatus == key }}"
+         href="{{ url_for('index', q=q, type=ftype, sort=sort, status=key) }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+
+    <select class="input select" name="sort" aria-label="排序方式" data-autosubmit>
+      {% for key, label in sort_options.items() %}
+      <option value="{{ key }}" {{ 'selected' if sort == key }}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="type" value="{{ ftype }}">
+    <input type="hidden" name="status" value="{{ fstatus }}">
+    <button class="btn btn-ghost" type="submit">筛选</button>
+    {% if filters_active %}
+    <a class="btn btn-ghost btn-clear" href="{{ url_for('index') }}">清除</a>
+    {% endif %}
+  </form>
+
+  <div class="toolbar-right">
+    <button class="btn btn-icon" type="button" id="viewToggle" aria-label="切换网格 / 列表视图" title="切换视图">
+      <span aria-hidden="true">▦</span>
+    </button>
+    <button class="btn btn-primary" type="button" data-open="addModal">
+      <span aria-hidden="true">＋</span><span class="btn-label">添加游戏</span>
+    </button>
+  </div>
+</section>
+
+{% if filters_active %}
+<p class="result-line">
+  找到 <b>{{ total }}</b> 款符合条件的游戏{% if q %}（关键词“{{ q }}”）{% endif %}
+</p>
+{% endif %}
+
+<!-- ── 游戏网格 ───────────────────────────────────────────── -->
+{% if games %}
+<div class="grid" id="gameGrid">
+  {% for g in games %}
+  <article class="card" data-id="{{ g.id }}" data-type="{{ g.game_type }}">
+    <a class="card-link" href="{{ url_for('game_detail', game_id=g.id) }}">
+      <div class="card-cover">
+        {% if g.cover_path %}
+          <img src="{{ url_for('thumb', relpath=g.cover_path) }}" alt="{{ g.title }} 封面" loading="lazy" decoding="async">
+        {% else %}
+          <div class="cover-ph {{ 'is-digital' if g.game_type == 'digital' }}">
+            <span>{{ g.title[:1] }}</span>
+          </div>
+        {% endif %}
+        <span class="chip chip-type {{ 'is-digital' if g.game_type == 'digital' }}">
+          {{ '卡带' if g.game_type == 'cartridge' else '数字' }}
+        </span>
+        {% if g.status and g.status != 'backlog' %}
+        <span class="chip chip-status status-{{ g.status }}">{{ statuses.get(g.status, g.status) }}</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <h3 class="card-title" title="{{ g.title }}">{{ g.title }}</h3>
+        <div class="card-meta">
+          {% if g.rating %}
+          <span class="stars" aria-label="评分 {{ g.rating }} 星">
+            {%- for i in range(1, 6) -%}
+              <span class="{{ 'on' if i <= g.rating else 'off' }}">★</span>
+            {%- endfor -%}
+          </span>
+          {% endif %}
+          {% if g.playtime_hours %}
+          <span class="meta-item">⏱ {{ g.playtime_hours|hours }}h</span>
+          {% endif %}
+          {% if g.purchase_price %}
+          <span class="meta-item">¥{{ g.purchase_price|money }}</span>
+          {% endif %}
+          {% if g.purchase_date %}
+          <span class="meta-item meta-date">{{ g.purchase_date }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </a>
+  </article>
+  {% endfor %}
+</div>
+
+{% if pages > 1 %}
+<nav class="pager" aria-label="分页">
+  {% if page > 1 %}
+  <a class="btn btn-ghost" href="{{ url_for('index', q=q, type=ftype, status=fstatus, sort=sort, page=page-1) }}">← 上一页</a>
+  {% else %}
+  <span class="btn btn-ghost is-disabled">← 上一页</span>
+  {% endif %}
+  <span class="pager-info">第 {{ page }} / {{ pages }} 页</span>
+  {% if page < pages %}
+  <a class="btn btn-ghost" href="{{ url_for('index', q=q, type=ftype, status=fstatus, sort=sort, page=page+1) }}">下一页 →</a>
+  {% else %}
+  <span class="btn btn-ghost is-disabled">下一页 →</span>
+  {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<div class="empty">
+  <div class="empty-art" aria-hidden="true">
+    <svg viewBox="0 0 120 96" width="150" height="120" focusable="false">
+      <rect x="18" y="14" width="34" height="68" rx="17" fill="currentColor" opacity=".18"></rect>
+      <rect x="68" y="14" width="34" height="68" rx="17" fill="currentColor" opacity=".1"></rect>
+      <circle cx="35" cy="32" r="6" fill="currentColor" opacity=".45"></circle>
+      <circle cx="85" cy="64" r="6" fill="currentColor" opacity=".3"></circle>
+    </svg>
+  </div>
+  {% if filters_active %}
+    <h2 class="empty-title">没有匹配的游戏</h2>
+    <p class="empty-text">换个关键词，或者<a href="{{ url_for('index') }}">清除筛选条件</a>看看全部收藏。</p>
+  {% else %}
+    <h2 class="empty-title">收藏库还是空的</h2>
+    <p class="empty-text">添加第一款游戏，开始记录你的卡带、数字版花费与游玩时长。</p>
+    <button class="btn btn-primary" type="button" data-open="addModal">＋ 添加第一款游戏</button>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+<!-- ── 弹窗 ─────────────────────────────────────────────────── -->
+{% block dialogs %}
+
+<dialog class="modal" id="addModal" aria-labelledby="addTitle">
+  <form method="post" action="{{ url_for('add_game') }}" enctype="multipart/form-data" class="modal-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <header class="modal-head">
+      <h2 id="addTitle">添加游戏</h2>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">✕</button>
+    </header>
+
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label">游戏名称 <i class="req">*</i></span>
+        <input class="input" name="title" required maxlength="120" placeholder="例如：塞尔达传说 王国之泪" autocomplete="off">
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">类型</span>
+          <select class="input" name="game_type">
+            {% for key, label in game_types.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="field">
+          <span class="field-label">状态</span>
+          <select class="input" name="status">
+            {% for key, label in statuses.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">购买日期</span>
+          <input class="input" type="date" name="purchase_date" max="{{ today }}">
+        </label>
+        <label class="field">
+          <span class="field-label">购买价格 (¥)</span>
+          <input class="input" type="number" step="0.01" min="0" name="purchase_price" placeholder="0.00" inputmode="decimal">
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">游玩时长 (小时)</span>
+          <input class="input" type="number" step="0.1" min="0" name="playtime_hours" placeholder="0" inputmode="decimal">
+        </label>
+        <div class="field">
+          <span class="field-label">评分</span>
+          <div class="rating-input" data-rating>
+            <input type="hidden" name="rating" value="0">
+            {% for i in range(1, 6) %}
+            <button class="star" type="button" data-value="{{ i }}" aria-label="{{ i }} 星">★</button>
+            {% endfor %}
+            <span class="rating-hint" data-rating-hint>未评分</span>
+          </div>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="field-label">封面图</span>
+        <input class="input file-input" type="file" name="cover" accept="image/*">
+        <span class="field-hint">支持 PNG / JPG / WEBP，单张不超过 8MB</span>
+      </label>
+
+      {% if ocr_available %}
+      <div class="ocr-box" data-ocr>
+        <div class="ocr-head">
+          <span class="ocr-title"><span aria-hidden="true">🔍</span> 购买截图识别</span>
+          <span class="ocr-sub">离线 OCR，自动读取日期与金额</span>
+        </div>
+        <label class="dropzone" data-dropzone>
+          <input class="sr-only" type="file" id="addScreenshot" accept="image/*" data-ocr-input>
+          <span class="dropzone-icon" aria-hidden="true">🖼</span>
+          <span class="dropzone-text">点击选择截图，或把图片拖到这里</span>
+        </label>
+        <div class="ocr-result" id="ocrResult" hidden></div>
+      </div>
+      {% endif %}
+
+      <label class="field">
+        <span class="field-label">备注 / 心流感受</span>
+        <textarea class="input" name="notes" rows="3" maxlength="20000"
+                  placeholder="写写你玩这款游戏时的心流与感受…"></textarea>
+      </label>
+    </div>
+
+    <footer class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-close>取消</button>
+      <button type="submit" class="btn btn-primary">保存并查看</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="modal modal-sm" id="importModal" aria-labelledby="importTitle">
+  <form method="post" action="{{ url_for('import_csv') }}" enctype="multipart/form-data" class="modal-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <header class="modal-head">
+      <h2 id="importTitle">导入 CSV</h2>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">✕</button>
+    </header>
+    <div class="modal-body">
+      <p class="modal-note">
+        选择之前用「导出」保存的 CSV 文件即可恢复收藏。同名的游戏会自动跳过，不会产生重复。
+      </p>
+      <label class="field">
+        <span class="field-label">CSV 文件</span>
+        <input class="input file-input" type="file" name="csv" accept=".csv,text/csv" required>
+      </label>
+    </div>
+    <footer class="modal-actions">
+      <a class="btn btn-ghost" href="{{ url_for('export_csv') }}">先导出一份备份</a>
+      <button type="submit" class="btn btn-primary">开始导入</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- 同步游玩时长：截图识别 / 任天堂账号 -->
+<dialog class="modal modal-lg" id="syncModal" aria-labelledby="syncTitle">
+  <div class="modal-form" data-ocr="{{ '1' if ocr_available else '0' }}">
+    <header class="modal-head">
+      <h2 id="syncTitle">同步游玩时长</h2>
+      <button class="icon-btn" type="button" data-close aria-label="关闭">✕</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="seg seg-sm sync-tabs" role="tablist">
+        <button class="seg-item is-active" type="button" data-sync-tab="ocr">截图识别</button>
+        <button class="seg-item" type="button" data-sync-tab="nintendo">任天堂账号</button>
+      </div>
+
+      <section class="sync-pane" data-sync-pane="ocr">
+        <p class="modal-note">
+          上传 Switch 个人主页「游玩记录」或家长控制 App 月报的截图，
+          自动识别出「游戏名 + 时长」。识别结果需要你确认后才会写入。
+        </p>
+        {% if ocr_available %}
+        <label class="dropzone" data-dropzone>
+          <input class="sr-only" type="file" id="playtimeShot" accept="image/*">
+          <span class="dropzone-icon" aria-hidden="true">🖼</span>
+          <span class="dropzone-text">点击选择游玩记录截图，或拖拽到这里</span>
+        </label>
+        {% else %}
+        <p class="sync-warn">OCR 引擎未安装，无法识别截图。</p>
+        {% endif %}
+      </section>
+
+      <section class="sync-pane" data-sync-pane="nintendo" hidden>
+        <div class="nt-card" id="ntStatus">正在读取绑定状态…</div>
+
+        <div class="nt-step" id="ntLinkBox" hidden>
+          <p class="modal-note"><b>第 1 步</b>　打开下面的链接，用任天堂账号登录：</p>
+          <div class="nt-url">
+            <code id="ntUrl">—</code>
+            <button class="btn btn-sm btn-soft" type="button" id="ntCopy">复制</button>
+          </div>
+          <p class="modal-note">
+            <b>第 2 步</b>　登录后会停在「Linking an External Account」页面，
+            <b>右键</b>「Select this person」按钮 → 复制链接地址
+            <span class="nt-tip">（不要直接点击按钮，否则拿不到令牌）</span>
+          </p>
+          <label class="field">
+            <span class="field-label">第 3 步　粘贴刚才复制的完整链接</span>
+            <input class="input" id="ntCallback" autocomplete="off"
+                   placeholder="npf54789befb391a838://auth#session_token_code=...">
+          </label>
+          <button class="btn btn-primary btn-sm" type="button" id="ntComplete">完成绑定</button>
+        </div>
+
+        <div class="nt-step" id="ntSyncBox" hidden>
+          <label class="field">
+            <span class="field-label">统计范围</span>
+            <select class="input" id="ntRange">
+              <option value="0">最近可用的全部日报</option>
+              <option value="7">最近 7 天</option>
+              <option value="30">最近 30 天</option>
+            </select>
+          </label>
+          <div class="nt-actions">
+            <button class="btn btn-primary btn-sm" type="button" id="ntSync">开始同步</button>
+            <button class="btn btn-ghost btn-sm" type="button" id="ntUnlink">解除绑定</button>
+          </div>
+          <p class="modal-note nt-warn">
+            非官方接口，任天堂可能随时调整；数据来自主机的家长控制统计，
+            只包含最近一段时间的每日记录，不含历史总量。
+          </p>
+        </div>
+      </section>
+
+      <div class="sync-result" id="syncResult" hidden></div>
+    </div>
+
+    <footer class="modal-actions">
+      <span class="sync-hint" id="syncHint"></span>
+      <button class="btn btn-ghost" type="button" data-close>关闭</button>
+      <button class="btn btn-primary" type="button" id="syncApply" disabled>写入选中项</button>
+    </footer>
+  </div>
+</dialog>
+
+{% endblock %}
